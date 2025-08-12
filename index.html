@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Salah Prayer Clock</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Salah Prayer Clock - Hanafi</title>
 <style>
   html, body {
     margin: 0;
@@ -11,15 +11,14 @@
     font-family: Arial, sans-serif;
     transition: background 1s ease, color 1s ease;
   }
-  /*
   .container {
-    max-width: 420px;
+    max-width: 920px;
     margin: 1rem auto;
-    background: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,10);
     border-radius: 12px;
     box-shadow: 0 4px 20px #0002;
     padding: 1.2rem;
-  } */
+  }
   h2 { text-align:center; margin: 0 0 1rem 0; }
   .clock { text-align:center; font-size: 1.8rem; font-weight: bold; margin-bottom: 0.3rem; }
   #dayPartIcon { text-align: center; margin-bottom: 0.6rem; width: 80px; height: 80px; margin-left: auto; margin-right: auto; }
@@ -34,14 +33,44 @@
   }
   .prayer-fill { position: absolute; top:0; left:0; height: 100%; transition: width 0.5s; }
   .prayer-text {
-    position: absolute; width: 100%; height: 100%;
+    position: absolute; width: 96%; height: 100%;
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 10px; font-weight: bold; color: #fff; text-shadow: 1px 1px 2px #000c;
   }
+  #watermark {
+    text-align: center;
+    font-size: 10px;
+    color: #666;
+    opacity: 0.6;
+    user-select: none;
+    margin-top: 6px;
+    font-style: italic;
+  }
   .error { text-align: center; color: crimson; }
+  
+  /* Manual input moved to bottom and small */
+  .manual-loc {
+    display: flex;
+    gap: 5px;
+    margin-top: 14px;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 0.8rem;
+  }
+  .manual-loc input {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 0.85rem;
+  }
+  .manual-loc button {
+    padding: 4px 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
 
   /* Icon animations */
-  .lightbulb-glow { filter: drop-shadow(0 0 5px rgba(255,247,183,0.7)); animation: glowPulse 2s ease-in-out infinite;}
+  .lightbulb-glow { filter: drop-shadow(0 0 5px rgba(255, 247, 183, 0.7)); animation: glowPulse 2s ease-in-out infinite;}
   @keyframes glowPulse {0%,100%{filter:drop-shadow(0 0 5px rgba(255,247,183,0.7));} 50%{filter:drop-shadow(0 0 12px rgba(255,247,183,1));}}
 
   .sun-rays { transform-origin: 50% 50%; animation: rotateRays 10s linear infinite; }
@@ -58,19 +87,27 @@
 </style>
 </head>
 <body>
-<div class="container">
-  <h2>🕌 Salah Prayer Clock</h2>
-  <div class="clock" id="clock"></div>
-  <div id="dayPartIcon"></div>
-  <div class="location" id="location">Fetching location…</div>
-  <div class="next-prayer" id="nextPrayer"></div>
-  <div id="prayerBars"></div>
-  <div class="error" id="error"></div>
-</div>
+  <div class="container">
+    <h2>🕌 Salah Prayer Clock</h2>
+    <div class="clock" id="clock"></div>
+    <div id="dayPartIcon"></div>
+    <div class="location" id="location">Fetching location…</div>
+    <div class="next-prayer" id="nextPrayer"></div>
+    <div id="prayerBars"></div>
+    <div id="watermark">Hanafi Madhab</div>
+    <div class="error" id="error"></div>
+
+    <!-- Manual location input moved here, small size -->
+    <div class="manual-loc" title="Enter city,country or lat,lon">
+      <input type="text" id="manualInput" placeholder="City,Country or lat,lon" aria-label="Manual location input" />
+      <button onclick="manualLocation()">Set</button>
+    </div>
+  </div>
 
 <script>
-let prayerTimes = [], currentPrayerIndex = -1;
-const colors = ['#38bdf8','#65a30d','#c026d3','#fb7185','#fbbf24','#16a34a'];
+let prayerTimes = [];
+let currentPrayerIndex = -1;
+const colors = ['#38bdf8', '#65a30d', '#c026d3', '#fb7185', '#fbbf24', '#16a34a'];
 
 const iconsSVG = {
   morningLight: `<svg viewBox="0 0 64 64" class="lightbulb-glow" xmlns="http://www.w3.org/2000/svg" fill="#ffeb3b" width="80" height="80"><path d="M32 2c-8 0-14 6-14 14 0 7.5 10 22 10 22h8s10-14.5 10-22c0-8-6-14-14-14z"/><rect x="26" y="42" width="12" height="10" fill="#fecb00" /><rect x="28" y="52" width="8" height="8" fill="#fdd835"/></svg>`,
@@ -80,79 +117,160 @@ const iconsSVG = {
   nightStars: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="#fce96a" width="80" height="80"><path class="star" d="M14 12 L16.5 17 L22 18 L17 22 L18 28 L14 25 L10 28 L11 22 L6 18 L12 17 Z" /><path class="star" d="M40 20 L42.5 25 L48 26 L43 30 L44 36 L40 33 L36 36 L37 30 L32 26 L38 25 Z" /><path class="star" d="M50 10 L52.5 15 L58 16 L53 20 L54 26 L50 23 L46 26 L47 20 L42 16 L48 15 Z" /><path class="star" d="M30 38 L32.5 43 L38 44 L33 48 L34 54 L30 51 L26 54 L27 48 L22 44 L28 43 Z" /><path class="star" d="M48 45 L50.5 50 L56 51 L51 55 L52 61 L48 58 L44 61 L45 55 L40 51 L46 50 Z" /><path class="star" d="M20 48 L22.5 53 L28 54 L23 58 L24 64 L20 61 L16 64 L17 58 L12 54 L18 53 Z" /></svg>`
 };
 
-function pad(n){return n<10?'0'+n:n;}
-function to12h(timeStr){let[h,m]=timeStr.split(':').map(Number),p=h>=12?'PM':'AM';h=h%12||12;return`${h}:${pad(m)} ${p}`;}
-function setRandomStarDelays(){document.querySelectorAll('#dayPartIcon svg .star').forEach(star=>{star.style.animationDelay=`${(Math.random()*4).toFixed(2)}s`;});}
-
-function updateDayPartIcon(){
-  const h=new Date().getHours();
-  const el=document.getElementById('dayPartIcon');
-  if(h>=5&&h<8) el.innerHTML=iconsSVG.morningLight;
-  else if(h<12) el.innerHTML=iconsSVG.sunMorning;
-  else if(h<16) el.innerHTML=iconsSVG.sunNoon;
-  else if(h<19) el.innerHTML=iconsSVG.sunset;
-  else el.innerHTML=iconsSVG.nightStars;
-  setRandomStarDelays();
+function pad(n) { return n < 10 ? '0' + n : n; }
+function to12h(timeStr) {
+  let [h, m] = timeStr.split(':').map(Number);
+  let period = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${pad(m)} ${period}`;
 }
-
-function updateBackgroundByTime(){
-  const h=new Date().getHours(); let bg='#fff',fg='#222';
-  if(h>=19||h<5){bg='#000';fg='#eee';}
-  else if(h>=12&&h<16){bg='#dbefff';}
-  else if(h>=16&&h<19){bg='#fff4e1';}
-  document.body.style.background=bg;document.documentElement.style.background=bg;
-  document.body.style.color=fg;
-}
-
-function showClock(){
-  const n=new Date(); let h=n.getHours(),m=n.getMinutes(),s=n.getSeconds(),p=h>=12?'PM':'AM';h=h%12||12;
-  document.getElementById('clock').textContent=`${pad(h)}:${pad(m)}:${pad(s)} ${p}`;
-  updateDayPartIcon(); updateBackgroundByTime();
-}
-
-function fetchPrayerTimes(lat,lon){
-  fetch(`https://api.aladhan.com/v1/timings/${Math.floor(Date.now()/1000)}?latitude=${lat}&longitude=${lon}&method=2`).then(r=>r.json()).then(d=>{
-    const t=d.data.timings,pr=['Fajr','Sunrise','Dhuhr','Asr','Maghrib','Isha'];
-    prayerTimes=pr.map(p=>({name:p,time:t[p]}));
-    document.getElementById('location').textContent=d.data.meta.timezone||'';
-    renderBars();updateProgressBars();
-  }).catch(()=>{document.getElementById('error').textContent='Could not get prayer times.';});
-}
-
-function renderBars(){
-  const cont=document.getElementById('prayerBars');cont.innerHTML='';
-  prayerTimes.forEach((p,i)=>{
-    cont.innerHTML+=`<div class="prayer-bar"><div class="prayer-fill" id="fill-${i}" style="background:${colors[i%colors.length]};width:0%"></div><div class="prayer-text">${p.name} <span>${to12h(p.time)}</span></div></div>`;
+function setRandomStarDelays() {
+  document.querySelectorAll('#dayPartIcon svg .star').forEach(star => {
+    star.style.animationDelay = `${(Math.random() * 4).toFixed(2)}s`;
   });
 }
 
-function updateProgressBars(){
-  if(prayerTimes.length<2) return;
-  const now=new Date(); let ni=-1;
-  for(let i=0;i<prayerTimes.length;i++){let[h,m]=prayerTimes[i].time.split(':').map(Number),t=new Date(now);t.setHours(h,m,0,0);if(now<t&&ni===-1){ni=i;break;}}
-  if(ni===-1) ni=0; currentPrayerIndex=(ni-1+prayerTimes.length)%prayerTimes.length;
-  const curr=prayerTimes[currentPrayerIndex],next=prayerTimes[ni];
-  let [ch,cm]=curr.time.split(':').map(Number),currD=new Date(now);currD.setHours(ch,cm,0,0);if(currD>now)currD.setDate(currD.getDate()-1);
-  let [nh,nm]=next.time.split(':').map(Number),nextD=new Date(currD);nextD.setHours(nh,nm,0,0);if(nextD<=currD)nextD.setDate(nextD.getDate()+1);
-  const tot=nextD-currD,elap=now-currD,perc=Math.max(0,Math.min(100,(elap/tot)*100));
-  prayerTimes.forEach((p,i)=>{document.getElementById(`fill-${i}`).style.width=(i===currentPrayerIndex?`${(100-perc).toFixed(1)}%`:'100%');document.getElementById(`fill-${i}`).style.opacity=i===currentPrayerIndex?'1':'0.35';});
-  let diff=Math.floor((nextD-now)/1000),hrs=Math.floor(diff/3600),mins=Math.floor((diff%3600)/60),secs=diff%60;
-  document.getElementById('nextPrayer').textContent=`Next: ${next.name} in ${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+function updateDayPartIcon() {
+  const hour = new Date().getHours();
+  const iconEl = document.getElementById('dayPartIcon');
+  if (hour >= 5 && hour < 8) iconEl.innerHTML = iconsSVG.morningLight;
+  else if (hour < 12) iconEl.innerHTML = iconsSVG.sunMorning;
+  else if (hour < 16) iconEl.innerHTML = iconsSVG.sunNoon;
+  else if (hour < 19) iconEl.innerHTML = iconsSVG.sunset;
+  else iconEl.innerHTML = iconsSVG.nightStars;
+  setRandomStarDelays();
 }
 
-function detectLocation(){
-  if('geolocation' in navigator){navigator.geolocation.getCurrentPosition(pos=>{fetchPrayerTimes(pos.coords.latitude,pos.coords.longitude);},()=>{document.getElementById('error').textContent='Allow location to get times.';});}
-  else document.getElementById('error').textContent='Geolocation not supported.';
+function updateBackgroundByTime() {
+  const hour = new Date().getHours();
+  let bg = '#fff', fg = '#222';
+  if (hour >= 19 || hour < 5) { bg = '#000'; fg = '#eee'; }
+  else if (hour >= 12 && hour < 16) { bg = '#dbefff'; }
+  else if (hour >= 16 && hour < 19) { bg = '#fff4e1'; }
+  document.body.style.background = bg;
+  document.documentElement.style.background = bg;
+  document.body.style.color = fg;
 }
 
-window.addEventListener('DOMContentLoaded',()=>{
-  showClock();updateBackgroundByTime();
+function showClock() {
+  const now = new Date();
+  let h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+  let p = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  document.getElementById('clock').textContent = `${pad(h)}:${pad(m)}:${pad(s)} ${p}`;
+  updateDayPartIcon();
+  updateBackgroundByTime();
+}
+
+function fetchPrayerTimes(lat, lon) {
+  // method=1 with school=1 for Hanafi Madhab Asr time
+  const url = `https://api.aladhan.com/v1/timings/${Math.floor(Date.now()/1000)}?latitude=${lat}&longitude=${lon}&method=1&school=1`;
+  fetch(url).then(r => r.json()).then(d => {
+    if (!d.data) throw new Error('Invalid data');
+    const t = d.data.timings;
+    const prayers = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+    prayerTimes = prayers.map(p => ({ name: p, time: t[p] }));
+    document.getElementById('location').textContent = d.data.meta.address || `${lat.toFixed(2)},${lon.toFixed(2)}`;
+    renderBars();
+    updateProgressBars();
+  }).catch(() => {
+    document.getElementById('error').textContent = 'Could not get prayer times. Please allow location or enter manually.';
+  });
+}
+
+function manualLocation() {
+  const val = document.getElementById('manualInput').value.trim();
+  if (!val) {
+    alert("Please enter a city,country or lat,lon");
+    return;
+  }
+  if (val.includes(',')) {
+    const parts = val.split(',');
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      // lat, lon
+      fetchPrayerTimes(parseFloat(parts[0]), parseFloat(parts[1]));
+    } else {
+      // city, country string
+      geocodeCity(val);
+    }
+  } else {
+    geocodeCity(val);
+  }
+}
+
+function geocodeCity(city) {
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        fetchPrayerTimes(lat, lon);
+      } else {
+        alert("Location not found, try another input");
+      }
+    }).catch(() => alert("Error fetching location"));
+}
+
+function renderBars() {
+  const cont = document.getElementById('prayerBars');
+  cont.innerHTML = '';
+  prayerTimes.forEach((p, i) => {
+    cont.innerHTML += `<div class="prayer-bar"><div class="prayer-fill" id="fill-${i}" style="background:${colors[i % colors.length]};width:0%"></div><div class="prayer-text">${p.name} <span>${to12h(p.time)}</span></div></div>`;
+  });
+}
+
+function updateProgressBars() {
+  if (prayerTimes.length < 2) return;
+  const now = new Date();
+  let nextIdx = -1;
+  for (let i = 0; i < prayerTimes.length; i++) {
+    let [h, m] = prayerTimes[i].time.split(':').map(Number);
+    let t = new Date(now);
+    t.setHours(h, m, 0, 0);
+    if (now < t && nextIdx === -1) { nextIdx = i; break; }
+  }
+  if (nextIdx === -1) nextIdx = 0;
+  currentPrayerIndex = (nextIdx - 1 + prayerTimes.length) % prayerTimes.length;
+  const curr = prayerTimes[currentPrayerIndex], next = prayerTimes[nextIdx];
+  let [ch, cm] = curr.time.split(':').map(Number), currDate = new Date(now);
+  currDate.setHours(ch, cm, 0, 0);
+  if (currDate > now) currDate.setDate(currDate.getDate() - 1);
+  let [nh, nm] = next.time.split(':').map(Number), nextDate = new Date(currDate);
+  nextDate.setHours(nh, nm, 0, 0);
+  if (nextDate <= currDate) nextDate.setDate(nextDate.getDate() + 1);
+  const total = nextDate - currDate;
+  const elapsed = now - currDate;
+  const perc = Math.max(0, Math.min(100, (elapsed / total) * 100));
+  prayerTimes.forEach((p, i) => {
+    document.getElementById(`fill-${i}`).style.width = (i === currentPrayerIndex ? `${(100 - perc).toFixed(1)}%` : '100%');
+    document.getElementById(`fill-${i}`).style.opacity = i === currentPrayerIndex ? '1' : '0.35';
+  });
+  let diff = Math.floor((nextDate - now) / 1000), hrs = Math.floor(diff / 3600), mins = Math.floor((diff % 3600) / 60), secs = diff % 60;
+  document.getElementById('nextPrayer').textContent = `Next: ${next.name} in ${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+}
+
+// Request geolocation with high accuracy enabled
+function detectLocation() {
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      pos => fetchPrayerTimes(pos.coords.latitude, pos.coords.longitude),
+      err => {
+        document.getElementById('error').textContent = 'Allow location or enter manually below.';
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  } else {
+    document.getElementById('error').textContent = 'Geolocation not supported.';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  showClock();
   detectLocation();
-  setInterval(showClock,1000);
-  setInterval(updateProgressBars,1000);
+  setInterval(showClock, 1000);
+  setInterval(updateProgressBars, 1000);
 });
 </script>
 </body>
 </html>
-
-
