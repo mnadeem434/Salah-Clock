@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Salah Prayer Clock (Colorful Bar & 12h Countdown)</title>
+<style>
+  body { font-family: Arial,sans-serif; background:#f2f4f5; color:#222; margin:0;}
+  .container { max-width:420px; margin:1rem auto; background:#fff; border-radius:12px;
+    box-shadow:0 4px 20px #0002; padding:1.2rem; }
+  h2 { text-align:center; margin:0 0 1rem 0;}
+  .clock { text-align:center; font-size:1.8rem; font-weight:bold; margin-bottom:.8rem;}
+  .location, .next-prayer { text-align:center; margin:.4rem 0;}
+  .prayer-bar { position:relative; height:38px; border-radius:70px; margin:10px 0 10px; overflow:hidden;}
+  .prayer-fill { position:absolute; top:0; left:0; height:100%; transition:width .5s;}
+  .prayer-text { position:absolute; width:90%; height:100%; display:flex; align-items:center;
+      justify-content:space-between; padding:0 10px; font-weight:bold; color:#fff;
+      text-shadow:1px 1px 2px #000c;}
+  .error { text-align:center; color:crimson;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>🕌 Salah Prayer Clock</h2>
+  <div class="clock" id="clock"></div>
+  <div class="location" id="location">Fetching location…</div>
+  <div class="next-prayer" id="nextPrayer"></div>
+  <div id="prayerBars"></div>
+  <div class="error" id="error"></div>
+</div>
+<script>
+let prayerTimes = [];
+let currentPrayerIndex = -1;
+// Vibrant, legible bar colors:
+const colors = ['#38bdf8','#65a30d','#c026d3','#fb7185','#fbbf24','#16a34a'];
+
+function pad(n){ return (n<10 ? '0':'')+n; }
+function to12h(timeStr) {
+  let [h,m] = timeStr.split(':').map(Number);
+  let period = h>=12? 'PM':'AM';
+  h = h%12; if(h===0)h=12;
+  return `${h}:${pad(m)} ${period}`;
+}
+function showClock(){
+  const now = new Date();
+  let hr = now.getHours(), min = now.getMinutes(), sec = now.getSeconds();
+  let period = hr>=12?'PM':'AM';
+  hr = hr%12; if(hr===0)hr=12;
+  document.getElementById('clock').textContent = `${pad(hr)}:${pad(min)}:${pad(sec)} ${period}`;
+}
+// Converts seconds to "H:MM:SS AM/PM"
+function secondsTo12h(secs, baseDate=new Date()){
+  let future = new Date(baseDate.getTime() + secs*1000);
+  let h = future.getHours(), m = future.getMinutes(), s = future.getSeconds();
+  let period = h>=12?'PM':'AM';
+  h = h%12; if(h===0)h=12;
+  return `${h}:${pad(m)}:${pad(s)} ${period}`;
+}
+function fetchPrayerTimes(lat,lon){
+  const url = `https://api.aladhan.com/v1/timings/${Math.floor(Date.now()/1000)}?latitude=${lat}&longitude=${lon}&method=2`;
+  fetch(url)
+    .then(resp=>resp.json())
+    .then(data=>{
+      if(!data.data) throw Error('Unable to get times');
+      const times = data.data.timings;
+      const prayers = ['Fajr','Sunrise','Dhuhr','Asr','Maghrib','Isha'];
+      prayerTimes = prayers.map(p=>({ name:p, time:times[p] }));
+      document.getElementById('location').textContent = data.data.meta.timezone || '';
+      renderPrayerBars();
+      updateProgressBars();
+    })
+    .catch(e=>{
+      document.getElementById('error').textContent = 'Could not get prayer times. Please try allowing location.';
+    });
+}
+function renderPrayerBars(){
+  const bars = document.getElementById('prayerBars');
+  bars.innerHTML = '';
+  prayerTimes.forEach((p,idx)=>{
+    const bar = document.createElement('div');
+    bar.className = 'prayer-bar';
+    bar.innerHTML = `
+      <div class="prayer-fill" id="fill-${idx}" style="background:${colors[idx%colors.length]}; width:0%"></div>
+      <div class="prayer-text">${p.name} <span>${to12h(p.time)}</span></div>
+    `;
+    bars.appendChild(bar);
+  });
+}
+function updateProgressBars(){
+  if(prayerTimes.length<2) return;
+  const now = new Date();
+  let nextIdx = -1;
+  for (let i=0; i<prayerTimes.length; i++){
+    let [h,m] = prayerTimes[i].time.split(':').map(Number);
+    let t = new Date(now); t.setHours(h,m,0,0);
+    if (now < t && nextIdx===-1) { nextIdx=i; break; }
+  }
+  if (nextIdx===-1) nextIdx=0;
+  currentPrayerIndex = (nextIdx-1 + prayerTimes.length) % prayerTimes.length;
+  const curr = prayerTimes[currentPrayerIndex], next = prayerTimes[nextIdx];
+  let currDate = new Date(now),
+      [ch,cm] = curr.time.split(':').map(Number),
+      [nh,nm] = next.time.split(':').map(Number);
+  currDate.setHours(ch,cm,0,0);
+  if (currDate > now) currDate.setDate(currDate.getDate()-1);
+  let nextDate = new Date(currDate); nextDate.setHours(nh,nm,0,0);
+  if (nextDate <= currDate) nextDate.setDate(nextDate.getDate()+1);
+  const total = nextDate-currDate, elapsed = now-currDate,
+        perc = Math.max(0,Math.min(100,(elapsed/total)*100));
+  prayerTimes.forEach((p,idx)=>{
+    document.getElementById(`fill-${idx}`).style.width =
+      (idx === currentPrayerIndex ? `${(100-perc).toFixed(1)}%` : '100%');
+    document.getElementById(`fill-${idx}`).style.opacity = idx === currentPrayerIndex? '1' : '0.35';
+  });
+  // Show next prayer countdown in 12hr clock
+  const diff = Math.floor((nextDate-now)/1000);
+  document.getElementById('nextPrayer').textContent = `Next: ${next.name} at ${to12h(next.time)} (in ${secondsTo12h(diff,now)})`;
+}
+function detectLocation(){
+  if('geolocation' in navigator){
+    navigator.geolocation.getCurrentPosition(pos=>{
+      fetchPrayerTimes(pos.coords.latitude, pos.coords.longitude);
+    }, ()=>{
+      document.getElementById('error').textContent = 'Allow location to get accurate times.';
+    });
+  }
+}
+// run clock & progress updates
+setInterval(showClock,1000);
+setInterval(updateProgressBars,1000);
+detectLocation();
+showClock();
+</script>
+</body>
+</html>
