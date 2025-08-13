@@ -98,7 +98,7 @@
     <div class="error" id="error"></div>
 
     <!-- Manual location input moved here, small size -->
-    <div class="manual-loc" title="Enter city,country or lat,lon">
+    <div class="manual-loc" title="Enter city, country or lat,lon">
       <input type="text" id="manualInput" placeholder="City,Country or lat,lon" aria-label="Manual location input" />
       <button onclick="manualLocation()">Set</button>
     </div>
@@ -244,11 +244,18 @@ function updateProgressBars() {
   const perc = Math.max(0, Math.min(100, (elapsed / total) * 100));
   prayerTimes.forEach((p, i) => {
     document.getElementById(`fill-${i}`).style.width = (i === currentPrayerIndex ? `${(100 - perc).toFixed(1)}%` : '100%');
-    document.getElementById(`fill-${i}`).style.opacity = i === currentPrayerIndex ? '1' : '0.35';
+    document.getElementById(`fill-${i}`).style.opacity = i === currentPrayerIndex ? '1': '0.35';
   });
   let diff = Math.floor((nextDate - now) / 1000), hrs = Math.floor(diff / 3600), mins = Math.floor((diff % 3600) / 60), secs = diff % 60;
   document.getElementById('nextPrayer').textContent = `Next: ${next.name} in ${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
 }
+
+  prayerTimes.forEach((p,i)=>{
+  document.getElementById(`fill-${i}`).style.width =
+    (i===currentPrayerIndex ? `${(100-perc).toFixed(1)}%` : '100%');
+  document.getElementById(`fill-${i}`).style.opacity = i===currentPrayerIndex ? '1': '0.35';
+});
+
 
 // Request geolocation with high accuracy enabled
 function detectLocation() {
@@ -274,6 +281,7 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
 
 
 
